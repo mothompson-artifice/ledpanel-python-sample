@@ -14,6 +14,9 @@ if False:
     BitColour: typing.TypeAlias = tuple[int, int, int]
 
 BLACK = 0
+WHITE = 0b11111111
+
+qr_data = [[False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False], [False, False, False, False, True, True, True, True, True, True, True, False, False, False, True, False, True, False, True, True, True, True, True, True, True, False, False, False, False], [False, False, False, False, True, False, False, False, False, False, True, False, True, True, True, False, True, False, True, False, False, False, False, False, True, False, False, False, False], [False, False, False, False, True, False, True, True, True, False, True, False, False, False, True, True, True, False, True, False, True, True, True, False, True, False, False, False, False], [False, False, False, False, True, False, True, True, True, False, True, False, True, True, False, True, False, False, True, False, True, True, True, False, True, False, False, False, False], [False, False, False, False, True, False, True, True, True, False, True, False, False, True, False, False, False, False, True, False, True, True, True, False, True, False, False, False, False], [False, False, False, False, True, False, False, False, False, False, True, False, True, False, False, True, True, False, True, False, False, False, False, False, True, False, False, False, False], [False, False, False, False, True, True, True, True, True, True, True, False, True, False, True, False, True, False, True, True, True, True, True, True, True, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, False, True, False, True, False, False, False, False, False, False, False, False, False, False, False, False, False], [False, False, False, False, True, True, True, True, True, False, True, True, True, False, False, True, False, True, False, True, False, True, False, True, False, False, False, False, False], [False, False, False, False, False, False, True, False, True, False, False, False, False, False, False, False, False, True, True, True, True, True, True, True, True, False, False, False, False], [False, False, False, False, False, True, True, True, False, False, True, False, True, False, True, True, True, True, True, True, False, False, True, True, False, False, False, False, False], [False, False, False, False, True, True, False, False, True, True, False, False, True, False, True, True, False, True, False, False, True, True, True, False, False, False, False, False, False], [False, False, False, False, False, False, False, True, True, True, True, False, True, True, False, False, True, False, True, False, True, True, False, False, True, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, True, False, True, False, False, False, False, True, True, True, True, False, True, False, False, False, False], [False, False, False, False, True, True, True, True, True, True, True, False, True, True, False, True, True, False, True, True, False, False, True, True, False, False, False, False, False], [False, False, False, False, True, False, False, False, False, False, True, False, False, True, True, False, False, True, False, True, True, True, True, True, True, False, False, False, False], [False, False, False, False, True, False, True, True, True, False, True, False, True, True, False, True, False, False, True, True, True, True, False, True, True, False, False, False, False], [False, False, False, False, True, False, True, True, True, False, True, False, True, True, True, False, False, False, False, False, True, False, True, False, False, False, False, False, False], [False, False, False, False, True, False, True, True, True, False, True, False, True, False, False, False, True, False, True, True, False, False, True, False, False, False, False, False, False], [False, False, False, False, True, False, False, False, False, False, True, False, True, False, False, True, False, True, False, False, True, True, True, False, False, False, False, False, False], [False, False, False, False, True, True, True, True, True, True, True, False, True, False, True, False, True, False, True, True, False, True, False, True, False, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False], [False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False, False]]
 
 display: bytearray = bytearray(256 * 64)
 
@@ -23,7 +26,7 @@ display: bytearray = bytearray(256 * 64)
 def get_bitstream(data: int, address: int, clock: int, colour_mask_r: int, colour_mask_g: int, colour_mask_b: int) -> Iterable[bool]:
     global display
 
-    x = (clock << 6) | (data << 3) | address
+    x = (clock << 6) | ((7 ^ data) << 3) | address
 
     # 16 bits: one driver.
     def generate_driver_bitstream(subtile: int, colour_mask: int) -> Iterable[bool]:
@@ -31,6 +34,7 @@ def get_bitstream(data: int, address: int, clock: int, colour_mask_r: int, colou
             y = subtile * 8 + i
             o = get_offset(x, y)
             yield (display[o] & colour_mask) != 0
+
         for i in range(8):
             y = subtile * 8 + i
             o = get_offset(x + 4, y)
@@ -68,11 +72,18 @@ def get_bytestream(address: int, clock: int, colour_mask_r: int, colour_mask_g: 
         yield bits_to_byte(bits)
     
 def get_interleaved(address: int, colour_mask_r: int, colour_mask_g: int, colour_mask_b: int) -> Iterable[int]:
-    clock_domains = zip(*[get_bytestream(address, clock, colour_mask_r, colour_mask_g, colour_mask_b) for clock in range(4)])
+    clk0 = get_bytestream(address, 0, colour_mask_r, colour_mask_g, colour_mask_b)
+    clk1 = get_bytestream(address, 1, colour_mask_r, colour_mask_g, colour_mask_b)
+    clk2 = get_bytestream(address, 2, colour_mask_r, colour_mask_g, colour_mask_b)
+    clk3 = get_bytestream(address, 3, colour_mask_r, colour_mask_g, colour_mask_b)
+
+    clock_domains = zip(clk0, clk1, clk2, clk3)
     
-    for clock_domain in clock_domains:
-        for byte in clock_domain:
-            yield byte
+    for b0, b1, b2, b3 in clock_domains:
+        yield b0
+        yield b1
+        yield b2
+        yield b3
         
 
 # GPIO pins for panel
@@ -80,23 +91,26 @@ def get_interleaved(address: int, colour_mask_r: int, colour_mask_g: int, colour
 #
 # Change them as needed for your panel
 
-oe=Pin(16,Pin.OUT)
-lat=Pin(17,Pin.OUT)
+oe = Pin(6, Pin.OUT)
+lat = Pin(7, Pin.OUT)
 
 # D2 needs to be immediately after D1, or the PIO won't work
-p1d1 = Pin(0, Pin.OUT) # Also A0
-p1d2 = Pin(1, Pin.OUT) # Also A1
-p2d1 = Pin(2, Pin.OUT)
-p2d2 = Pin(3, Pin.OUT)
-p3d1 = Pin(4, Pin.OUT)
-p3d2 = Pin(5, Pin.OUT)
-p4d1 = Pin(6, Pin.OUT)
-p4d2 = Pin(7, Pin.OUT)  
+p1d1 = Pin(8, Pin.OUT)
+p1d2 = Pin(9, Pin.OUT)
+p2d1 = Pin(10, Pin.OUT)
+p2d2 = Pin(11, Pin.OUT)
+p3d1 = Pin(12, Pin.OUT)
+p3d2 = Pin(13, Pin.OUT)
+p4d1 = Pin(14, Pin.OUT)
+p4d2 = Pin(15, Pin.OUT)  
 
-clk1 = Pin(18, Pin.OUT) 
-clk5 = Pin(19, Pin.OUT)
-clk9 = Pin(20, Pin.OUT)
-clk13 = Pin(21, Pin.OUT)
+a0 = Pin(4, Pin.OUT)
+a1 = Pin(5, Pin.OUT)
+
+clk1 = Pin(0, Pin.OUT) 
+clk5 = Pin(1, Pin.OUT)
+clk9 = Pin(2, Pin.OUT)
+clk13 = Pin(3, Pin.OUT)
 
 @rp2.asm_pio(out_init=(rp2.PIO.OUT_LOW,) * 8, set_init=(rp2.PIO.OUT_LOW,) * 4, autopull = True, pull_thresh = 0, fifo_join = rp2.PIO.JOIN_TX)
 def pioclk():
@@ -155,8 +169,10 @@ def setup():
     clear()
 
     global sm
-    sm = rp2.StateMachine(0, pioclk, freq=10000000, out_base = p1d1, set_base = clk1)
+    sm = rp2.StateMachine(0, pioclk, freq=5000000, out_base = p1d1, set_base = clk1)
 
+    sm.active(1)
+    
     # Run the display-update loop on the second core
     _thread.start_new_thread(displayupdate, ())
 
@@ -198,103 +214,109 @@ def dim(v):
 
         lat.value(0)
     
-buffers: list[array] = [bytearray(1540) for _ in range(4)]
-for addr in range(4):
-    # Have the PIOs leave the address bits in the right state
-    v = addr * 0x55
-    for j in range(4):
-        buffers[addr][1536 + j] = v
+
+PLANES = [(0x80, 0x10, 0x02), (0x40, 0x08, 0x01), (0x20, 0x04, 0x02)]
+
+front: list[bytearray] = [bytearray(1536) for _ in range(4 * len(PLANES))]
+back: list[bytearray] = [bytearray(1536) for _ in range(4 * len(PLANES))]
 
 def blit() -> None:
-    global buffers
+    global front, back
    
-    # For each address line
-    for addr in range(4):
-        buf = buffers[addr]
-        i = 0
-        for byte in get_interleaved(addr, 0x20, 0x04, 0x01):
-            buf[i] = byte
-            i += 1
+    for p, (colour_mask_r, colour_mask_g, colour_mask_b) in enumerate(PLANES):
+        # For each address line
+        for addr in range(4):
+            buf = back[4 * p + addr]
+            i = 0
+            for byte in get_interleaved(addr, colour_mask_r, colour_mask_g, colour_mask_b):
+                buf[i] = byte
+                i += 1
 
-        if i != 1536:
-            print("Warning: blit size mismatch", i)
+            if i != 1536:
+                print("Warning: blit size mismatch", i)
 
+    back, front = front, back
 
 # This code outputs data into the panel, one address-line (1/4 of the
 # panel) per loop.
 def displayupdate():
+   
     while True:
-        for address in range(4):
-            # Disable display while updating
-            oe.value(1)
+        # Hold time for plane #0
+        m = 240
 
-            sm.active(1)
+        for p in range(len(PLANES)):
+            for address in range(4 * p, 4 * p + 4):
+                # Disable display while updating
+                oe.value(1)
 
-            # Output this buffer to the state machine's FIFO
-            sm.put(buffers[address])   
-            
-            while sm.tx_fifo() > 0:
-                pass # Wait for FIFO to empty
-            
-            # Stop the machine
-            # sm.active(0)
+                a0.value(((address >> 0) & 1) != 0)
+                a1.value(((address >> 1) & 1) != 0)
 
-            # time.sleep_ms(1)
+                # Output this buffer to the state machine's FIFO
+                sm.put(front[address])   
+                
+                while sm.tx_fifo() > 0:
+                    pass # Wait for FIFO to empty
 
-            # Latch the data.
-            lat.toggle()
-            time.sleep_us(10)
-            
-            lat.toggle()
+                # Latch the data.
+                lat.toggle()
+                time.sleep_us(10)
+                
+                lat.toggle()
 
-            # Re-enable display
-            oe.value(0)
+                # Re-enable display
+                oe.value(0)
 
-            # Show this for a bit.
-            time.sleep_us(125)
+                # Show this for a bit.
+                time.sleep_us(m)
+
+                m >>= 1
 
 def get_offset(x: int, y: int) -> int:
     return y * 256 + x
 
-def set_pixel(x: int, y: int, r: bool, g: bool, b: bool):
+def set_pixel(x: int, y: int, c: int):
     global display
-    c = 0
-    if r:
-        c |= 0xE0
-    if g:
-        c |= 0x1C
-    if b:
-        c |= 0x03
-
-    display[get_offset(x, y)] = 0xFF
+    
+    display[get_offset(x, y)] = c
     
 def clear():
     global display
     for i in range(256 * 64):
         display[i] = BLACK
     
+def rgb332(r: int, g: int, b: int) -> int:
+    return ((r & 0b11100000) | ((g & 0b11100000) >> 3) | ((b & 0b11000000) >> 6))
+
 def main():
     setup()
 
     print('Moo')
-    for x in range(256):
-        for y in range(64):
-            set_pixel(x, y, (x // 8) % 2 == 0, (y // 8) % 2 == 0, ((x // 8) + (y // 8)) % 2 == 0)
-            # set_pixel(x, y, True, False, False)
-    
-    # Display doesn't change until blit() is called
-    blit()
+    while True:
+        clear()
+        
+        t = time.ticks_ms()
+        for y, row in enumerate(qr_data):
+            for x, value in enumerate(row):
+                c = WHITE if value else BLACK
+                set_pixel(32 + 2 * x, 2 * y, c)
+                set_pixel(32 + 2 * x + 1, 2 * y, c)
+                set_pixel(32 + 2 * x, 2 * y + 1, c)
+                set_pixel(32 + 2 * x + 1, 2 * y + 1, c)
+                
+            # Display doesn't change until blit() is called
 
+        print('Set pixels done', time.ticks_diff(time.ticks_ms(), t))
+        t = time.ticks_ms()
+        blit()
+        print('Blit done', time.ticks_diff(time.ticks_ms(), t))
+        time.sleep_ms(100)
+        
 # Uncomment this to auto-start on import. If this file is called main.py
 # it will auto-run on panel boot.
 
 main()
-
-for j in range(4):
-    for i, v in enumerate(buffers[j]):
-        if v != 0xFF:
-            print(f'buffers[{j}][{i}] = {v}')
-
 
 while True:
     pass
