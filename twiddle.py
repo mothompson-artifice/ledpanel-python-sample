@@ -1,9 +1,16 @@
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Callable
 
 def get_offset(x: int, y: int) -> int:
     return y * 256 + x
+
+def get_bit(display: bytearray, x: int, y: int, mask: int) -> bool:
+    o = get_offset(x, y)
+    return (display[o] & mask) != 0
+
+type GetBitFn[T] = Callable[[int, int, int], T]
+type MergeFn[T, I] = Callable[[Iterable[T]], I]
 
 # The total panel size is 256 by 64 pixels.
 # It's formed of 4, 64 x 64 clock domains.
@@ -23,23 +30,21 @@ def get_offset(x: int, y: int) -> int:
 # Clock: x >> 6
 # Address: x % 4
 # Data: (x >> 3) % 8
-def get_bitstream(display: bytearray, data: int, address: int, clock: int, colour_mask_r: int, colour_mask_g: int, colour_mask_b: int) -> Iterable[bool]:
+def get_bitstream[T](fn: GetBitFn[T], data: int, address: int, clock: int, colour_mask_r: int, colour_mask_g: int, colour_mask_b: int) -> Iterable[T]:
     x = (clock << 6) | ((7 ^ data) << 3) | address
 
     # 16 bits: one driver.
-    def generate_driver_bitstream(subtile: int, colour_mask: int) -> Iterable[bool]:
+    def generate_driver_bitstream(subtile: int, colour_mask: int) -> Iterable[T]:
         for i in range(8):
             y = subtile * 8 + i
-            o = get_offset(x, y)
-            yield (display[o] & colour_mask) != 0
-
+            yield fn(x, y, colour_mask)
+            
         for i in range(8):
             y = subtile * 8 + i
-            o = get_offset(x + 4, y)
-            yield (display[o] & colour_mask) != 0
+            yield fn(x + 4, y, colour_mask)
 
     # 3 drivers: one subtile, 48 bits.
-    def generate_subtile_bitstream(subtile: int) -> Iterable[bool]:
+    def generate_subtile_bitstream(subtile: int) -> Iterable[T]:
         # Blue
         yield from generate_driver_bitstream(subtile, colour_mask_b)
 
@@ -53,27 +58,27 @@ def get_bitstream(display: bytearray, data: int, address: int, clock: int, colou
     for subtile in range(8):
         yield from generate_subtile_bitstream(subtile)
 
+def bits_to_byte(bits: Iterable[bool]) -> int:
+    v: int = 0
+    for b in bits:
+        v <<= 1
+        if b:
+            v |= 1
+
+    return v
+
 # Clock: x >> 6
 # Address: x % 4
-def get_bytestream(display: bytearray, address: int, clock: int, colour_mask_r: int, colour_mask_g: int, colour_mask_b: int) -> Iterable[int]:
-    def bits_to_byte(bits: Iterable[tuple[bool, ...]]) -> int:
-        v: int = 0
-        for b in bits:
-            v <<= 1
-            if b:
-                v |= 1
-
-        return v
-
+def get_bytestream[T, I](fn: GetBitFn[T], merge: MergeFn[T, I], address: int, clock: int, colour_mask_r: int, colour_mask_g: int, colour_mask_b: int) -> Iterable[I]:
     # 64 subtiles: 4 panels.
-    for bits in zip(*[get_bitstream(display, data, address, clock, colour_mask_r, colour_mask_g, colour_mask_b) for data in range(8)]):
-        yield bits_to_byte(bits)
+    for bits in zip(*[get_bitstream(fn, data, address, clock, colour_mask_r, colour_mask_g, colour_mask_b) for data in range(8)]):
+        yield merge(bits)
     
-def get_interleaved(display: bytearray, address: int, colour_mask_r: int, colour_mask_g: int, colour_mask_b: int) -> Iterable[int]:
-    clk0 = get_bytestream(display, address, 0, colour_mask_r, colour_mask_g, colour_mask_b)
-    clk1 = get_bytestream(display, address, 1, colour_mask_r, colour_mask_g, colour_mask_b)
-    clk2 = get_bytestream(display, address, 2, colour_mask_r, colour_mask_g, colour_mask_b)
-    clk3 = get_bytestream(display, address, 3, colour_mask_r, colour_mask_g, colour_mask_b)
+def get_interleaved[T, I](fn: GetBitFn[T], merge: MergeFn[T, I], address: int, colour_mask_r: int, colour_mask_g: int, colour_mask_b: int) -> Iterable[I]:
+    clk0 = get_bytestream(fn, merge, address, 0, colour_mask_r, colour_mask_g, colour_mask_b)
+    clk1 = get_bytestream(fn, merge, address, 1, colour_mask_r, colour_mask_g, colour_mask_b)
+    clk2 = get_bytestream(fn, merge, address, 2, colour_mask_r, colour_mask_g, colour_mask_b)
+    clk3 = get_bytestream(fn, merge, address, 3, colour_mask_r, colour_mask_g, colour_mask_b)
 
     clock_domains = zip(clk0, clk1, clk2, clk3)
     
@@ -92,15 +97,19 @@ PLANES = [
     (0x20, 0x04, 0x02)
 ]
 
-def blit(back: list[bytearray], display: bytearray) -> None:
+def blit_inner[T, I](fn: GetBitFn[T], merge: MergeFn[T, I]) -> Iterable[I]:
     for p, (colour_mask_r, colour_mask_g, colour_mask_b) in enumerate(PLANES):
         # For each address line
         for addr in range(4):
-            buf = back[4 * p + addr]
-            i = 0
-            for byte in get_interleaved(display, addr, colour_mask_r, colour_mask_g, colour_mask_b):
-                buf[i] = byte
-                i += 1
+            for byte in get_interleaved(fn, merge, addr, colour_mask_r, colour_mask_g, colour_mask_b):
+                yield byte
 
-            if i != 1536:
-                print("Warning: blit size mismatch", i)
+def blit(back: list[bytearray], display: bytearray) -> None:
+    def get_bit_fn(x: int, y: int, mask: int) -> bool:
+        return get_bit(display, x, y, mask)
+    
+    p = ((i, j) for i in range(12) for j in range(1536))
+    for (i, j), byte in zip(p, blit_inner(get_bit_fn, bits_to_byte)):
+        back[i][j] = byte
+        
+    
