@@ -1,0 +1,25 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/../micropython",
+                "${workspaceFolder}/../micropython/ports/rp2",
+                "${workspaceFolder}/natmod/build/"
+            ],
+            "defines": [
+                "NO_QSTR",
+                "MICROPY_ENABLE_DYNRUNTIME",
+                "MP_ENDIANNESS_LITTLE",
+                "MP_CONFIGFILE=<twiddle.config.h>"
+            ],
+            "windowsSdkVersion": "10.0.26100.0",
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64"
+        }
+    ],
+    "version": 4
+}

@@ -1,0 +1,5 @@
+# Native module build artifacts
+*.mpy
+*.o
+*.a
+header.s

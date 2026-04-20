@@ -1,6 +1,6 @@
-from __future__ import annotations
-
-from typing import Iterable
+if False:
+    from __future__ import annotations
+    from typing import Iterable
 
 def get_offset(x: int, y: int) -> int:
     return y * 256 + x

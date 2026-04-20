@@ -1,4 +1,5 @@
 import twiddle_old
+import twiddle_py
 import twiddle
 import random
 import time
@@ -31,7 +32,7 @@ def get_bit(x: int, y: int, mask: int) -> BitID:
 
 def twiddle_fast() -> Iterable[list[BitID]]:
     # What's that, you say? Cache locality?
-    for r, g, b in twiddle.PLANES:
+    for r, g, b in twiddle_py.PLANES:
         for addr in range(4):
             for subtile in range(8):
                 for p in (b, g, r):
@@ -46,7 +47,7 @@ def twiddle_fast_direct(buffer: bytearray, display: bytes) -> None:
     ptr = 0
 
     # What's that, you say? Cache locality?
-    for r, g, b in twiddle.PLANES:
+    for r, g, b in twiddle_py.PLANES:
         for addr in range(4):
             for subtile in range(8):
                 for p in (b, g, r):
@@ -311,7 +312,7 @@ while True:
 
     p = ((i, j) for i in range(12) for j in range(1536))
     start = time.time()
-    twiddle_fast_direct4(direct_buffer, display)
+    twiddle.variant4(direct_buffer, display)
     end = time.time()
 
     print(f"New: {end - start:.3f} seconds")
