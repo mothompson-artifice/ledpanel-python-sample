@@ -14,5 +14,7 @@ ARCH = armv6m
 # Uncomment to link against compiler runtime (e.g. for soft-float helpers)
 # LINK_RUNTIME = 1
 
+# MPY_LD_FLAGS += -lm
+
 # Include MicroPython build rules
 include $(MPY_DIR)/py/dynruntime.mk
