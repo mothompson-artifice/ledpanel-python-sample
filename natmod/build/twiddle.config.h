@@ -167,6 +167,12 @@ typedef uintptr_t mp_off_t;
 #define MP_QSTR_values (163)
 #define MP_QSTR_write (164)
 #define MP_QSTR_zip (165)
-#define MP_QSTR_blit (mp_native_qstr_table[1])
+#define MP_QSTR_b64decode (mp_native_qstr_table[1])
+#define MP_QSTR_blit (mp_native_qstr_table[2])
+#define MP_QSTR_blit_332_565 (mp_native_qstr_table[3])
+#define MP_QSTR_blit_palettized (mp_native_qstr_table[4])
+#define MP_QSTR_blit_palettized_rle (mp_native_qstr_table[5])
+#define MP_QSTR_fill_332 (mp_native_qstr_table[6])
+#define MP_QSTR_twiddle (mp_native_qstr_table[7])
 extern const uint16_t mp_native_qstr_table[];
 extern const mp_uint_t mp_native_obj_table[];
