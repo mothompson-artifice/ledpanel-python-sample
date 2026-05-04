@@ -2,11 +2,14 @@
 
 from machine import Pin
 import rp2
+import twiddle
 
+import sys
 from sys import exit
 import _thread
 from array import array
 import time
+import binascii
 
 if False:
     from typing import Iterable, TypeAlias
@@ -103,7 +106,7 @@ def setup():
     clear()
 
     global sm
-    sm = rp2.StateMachine(0, pioclk, freq=5000000, out_base = p1d1, set_base = clk1)
+    sm = rp2.StateMachine(0, pioclk, freq=50000000, out_base = p1d1, set_base = clk1)
 
     sm.active(1)
     
@@ -113,7 +116,7 @@ def setup():
 # Set the brightness of the panels by configuring the driver chip
 # Minimum brightness = 0
 # Maximum brightness = 63
-def dim(v):
+def dim(v: int):
     lat.value(0)
 
     clocks = (clk1, clk5, clk9, clk13)
@@ -151,51 +154,56 @@ def dim(v):
 
 PLANES = [(0x80, 0x10, 0x02), (0x40, 0x08, 0x01), (0x20, 0x04, 0x02)]
 
-front: list[bytearray] = [bytearray(1536) for _ in range(4 * len(PLANES))]
-back: list[bytearray] = [bytearray(1536) for _ in range(4 * len(PLANES))]
+front = bytearray(1536 * 4 * len(PLANES))
+back = bytearray(1536 * 4 * len(PLANES))
+front_planes = [front[i * 1536: (i + 1) * 1536] for i in range(4 * len(PLANES))]
 
 def blit() -> None:
     global front, back
-   
-    for p, (colour_mask_r, colour_mask_g, colour_mask_b) in enumerate(PLANES):
-        # For each address line
-        for addr in range(4):
-            buf = back[4 * p + addr]
-            i = 0
-            for byte in get_interleaved(addr, colour_mask_r, colour_mask_g, colour_mask_b):
-                buf[i] = byte
-                i += 1
+    global front_planes
 
-            if i != 1536:
-                print("Warning: blit size mismatch", i)
+    twiddle.twiddle(back, display)
 
     back, front = front, back
+    front_planes = [front[i * 1536: (i + 1) * 1536] for i in range(4 * len(PLANES))]
+
+
+avg_loop_duration = 0
 
 # This code outputs data into the panel, one address-line (1/4 of the
 # panel) per loop.
 def displayupdate():
-   
+    global avg_loop_duration
+
+    plane_indices = [0, 1, 0, 2, 0, 1, 0]
+    # plane_indices = [0]
+
     while True:
         # Hold time for plane #0
-        m = 240
+        m = 2
 
-        for p in range(len(PLANES)):
+        for p in plane_indices:
             for address in range(4 * p, 4 * p + 4):
+                loop_start = time.ticks_us()
+
+                # Output this buffer to the state machine's FIFO
+                sm.put(front_planes[address])
+                
+                while sm.tx_fifo() > 0:
+                    pass # Wait for FIFO to empty
+
+                loop_duration = time.ticks_us() - loop_start
+                avg_loop_duration = (avg_loop_duration * 15 + loop_duration) >> 4
+
                 # Disable display while updating
                 oe.value(1)
 
                 a0.value(((address >> 0) & 1) != 0)
                 a1.value(((address >> 1) & 1) != 0)
 
-                # Output this buffer to the state machine's FIFO
-                sm.put(front[address])   
-                
-                while sm.tx_fifo() > 0:
-                    pass # Wait for FIFO to empty
-
                 # Latch the data.
                 lat.toggle()
-                time.sleep_us(10)
+                # time.sleep_us(1)
                 
                 lat.toggle()
 
@@ -204,8 +212,6 @@ def displayupdate():
 
                 # Show this for a bit.
                 time.sleep_us(m)
-
-                m >>= 1
 
 def get_offset(x: int, y: int) -> int:
     return y * 256 + x
@@ -224,33 +230,75 @@ def rgb332(r: int, g: int, b: int) -> int:
     return ((r & 0b11100000) | ((g & 0b11100000) >> 3) | ((b & 0b11000000) >> 6))
 
 def main():
+    global avg_loop_duration
+    global display
+
     setup()
 
     print('Moo')
-    while True:
-        clear()
-        
-        t = time.ticks_ms()
-        for y, row in enumerate(qr_data):
-            for x, value in enumerate(row):
-                c = WHITE if value else BLACK
-                set_pixel(32 + 2 * x, 2 * y, c)
-                set_pixel(32 + 2 * x + 1, 2 * y, c)
-                set_pixel(32 + 2 * x, 2 * y + 1, c)
-                set_pixel(32 + 2 * x + 1, 2 * y + 1, c)
-                
-            # Display doesn't change until blit() is called
+    clear()
 
-        print('Set pixels done', time.ticks_diff(time.ticks_ms(), t))
-        t = time.ticks_ms()
-        blit()
-        print('Blit done', time.ticks_diff(time.ticks_ms(), t))
-        time.sleep_ms(100)
-        
-# Uncomment this to auto-start on import. If this file is called main.py
-# it will auto-run on panel boot.
+    while True:
+        # Read 332-encoded frame data from stdin
+        packet = sys.stdin.readline().strip()
+        temp = bytearray(4096)
+
+        try:
+            if packet:
+                now = time.ticks_ms()
+                mode, x0, y0, w, h, data = packet.split(',', 5)
+                x0, y0, w, h = int(x0), int(y0), int(w), int(h)
+                # data = binascii.a2b_base64(data)
+                twiddle.b64decode(temp, data)
+
+                # 'Raw' 332 data
+                if mode == 'R':
+                    twiddle.blit(display, 256, temp, x0, y0, w, h)
+                    
+                # Solid colour
+                elif mode == '0':
+                    twiddle.fill_332(display, 256, temp[0], x0, y0, w, h)
+                
+                # Per-block palette (with 1, 2, 3, 4 index bits)
+                elif mode == '1':
+                    twiddle.blit_palettized(display, 256, temp, 1, x0, y0, w, h)
+                    
+                elif mode == '2':
+                    twiddle.blit_palettized(display, 256, temp, 2, x0, y0, w, h)
+
+                elif mode == '3':
+                    twiddle.blit_palettized(display, 256, temp, 3, x0, y0, w, h)
+                    
+                elif mode == '4':
+                    twiddle.blit_palettized(display, 256, temp, 4, x0, y0, w, h)
+
+                # RLE-encoded per-block palette
+                elif mode == 'A':
+                    twiddle.blit_palettized_rle(display, 256, temp, 1, x0, y0, w, h)
+                    
+                elif mode == 'B':
+                    twiddle.blit_palettized_rle(display, 256, temp, 2, x0, y0, w, h)
+
+                elif mode == 'C':
+                    twiddle.blit_palettized_rle(display, 256, temp, 3, x0, y0, w, h)
+                    
+                elif mode == 'D':
+                    twiddle.blit_palettized_rle(display, 256, temp, 4, x0, y0, w, h)
+                
+                else:
+                    print(f'Unknown mode: {mode}')
+                    continue
+
+                delta = time.ticks_ms() - now
+                # print(f"Frame {mode} ({w}x{h}) processed in {delta} ms")
+                
+            else:
+                # Flush buffer on a blank line
+
+                blit()
+                print(f'Frame rendered. Avg loop duration: {avg_loop_duration}us')
+
+        except Exception as e:
+            print(f'Parse error: {e}')
 
 main()
-
-while True:
-    pass
